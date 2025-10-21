@@ -1,2 +1,2 @@
 # Test-Pubsub
-Smaller isolation test with to investigate some asio-grpc behaviours, particualry with handling stopped signals
+Smaller isolation test to investigate some asio-grpc behaviours, particualry with handling stopped signals
