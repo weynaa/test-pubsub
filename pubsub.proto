@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+message SubMessage{
+	int32 value = 1;
+}
+
+service PubSub {
+  // Sends a greeting
+  rpc subscribe(stream SubMessage) returns (google.protobuf.Empty) {}
+}
