@@ -5,6 +5,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(gRPC REQUIRED)
 
+set(STDEXEC_BUILD_EXAMPLES OFF)
+set(STDEXEC_BUILD_TESTS OFF)
 add_subdirectory(deps/asio-grpc)
 add_subdirectory(deps/stdexec)
 

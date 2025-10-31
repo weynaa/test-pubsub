@@ -1,0 +1,6 @@
+[submodule "deps/asio-grpc"]
+	path = deps/asio-grpc
+	url = https://github.com/Tradias/asio-grpc.git
+[submodule "deps/stdexec"]
+	path = deps/stdexec
+	url = https://github.com/nvidia/stdexec.git
