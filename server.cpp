@@ -28,9 +28,10 @@ struct AgrpcServer{
 
 	~AgrpcServer() {
 		scope.request_stop();
+		server->Shutdown();
 		stdexec::sync_wait(scope.on_empty());
 		grpc_context->work_finished();
-		server->Shutdown();
+		context_thread.join();
 	}
 
 private:
