@@ -1,6 +1,11 @@
 #include <agrpc/asio_grpc.hpp>
+#include <grpcpp/grpcpp.h>
+
+#include <stdexec/execution.hpp>
 
 #include "pubsub.grpc.pb.h"
+
+#include <iostream>
 
 int main(int argc, const char **argv) {
   agrpc::GrpcContext grpc_context;
@@ -10,8 +15,23 @@ int main(int argc, const char **argv) {
   auto scope_exit = std::shared_ptr<agrpc::GrpcContext>(
       &grpc_context,
       [](agrpc::GrpcContext *context) { context->work_finished(); });
-  using ClientRPC = agrpc::ClientRPC<&PubSub::AsyncService::Requestsubscribe>;
+  
+  std::string url("127.0.0.1:50051");
+  const auto channel = grpc::CreateChannel(url, grpc::InsecureChannelCredentials());
+  PubSub::Stub stub(channel);
 
+  using SubRPC = agrpc::ClientRPC<&PubSub::Stub::PrepareAsyncsubscribe>;
+  SubRPC rpc(grpc_context);
+  SubMessage msg;
+
+  google::protobuf::Empty empty;
+  stdexec::sync_wait(rpc.start(stub, empty));
+
+  for(int i = 0; ;++i){
+    std::cin.get();
+    msg.set_value(i);
+    stdexec::sync_wait(rpc.write(msg));
+  }
 
   return 0;
 }

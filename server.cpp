@@ -37,6 +37,7 @@ struct AgrpcServer{
 private:
 	auto handle_streaming_request(StreamingRPC &rpc) -> exec::task<void> {
 		SubMessage msg;
+		std::cout << "start streaming" << std::endl;
 		while(co_await rpc.read(msg, agrpc::use_sender)){
 			std::cout << "got message: " << msg.value() << std::endl;
 		}
