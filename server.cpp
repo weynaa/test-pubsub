@@ -10,6 +10,7 @@
 #include <iostream>
 #include <memory>
 #include <thread>
+#include <chrono>
 
 struct AgrpcServer{
 
@@ -23,12 +24,15 @@ struct AgrpcServer{
 			scope.spawn(stdexec::schedule(grpc_context->get_scheduler())
 				| stdexec::let_value([this](){
 					return agrpc::register_sender_rpc_handler<StreamingRPC>(*grpc_context, service, std::bind_front(&AgrpcServer::handle_streaming_request, this));
+				})
+				| stdexec::upon_error([](auto){
+					std::cout << "rpc_handler exception"<< std::endl;
 				}));
 		}
 
 	~AgrpcServer() {
 		scope.request_stop();
-		server->Shutdown();
+		server->Shutdown(std::chrono::system_clock::now() + std::chrono::seconds(1));
 		stdexec::sync_wait(scope.on_empty());
 		grpc_context->work_finished();
 		context_thread.join();
