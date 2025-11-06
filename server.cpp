@@ -4,6 +4,7 @@
 
 #include <exec/async_scope.hpp>
 #include <exec/task.hpp>
+#include <exec/timed_thread_scheduler.hpp>
 
 #include "pubsub.grpc.pb.h"
 
@@ -39,11 +40,17 @@ struct AgrpcServer{
 	}
 
 private:
-	auto handle_streaming_request(StreamingRPC &rpc) -> exec::task<void> {
+	auto handle_streaming_request(StreamingRPC &rpc, google::protobuf::Empty&) -> exec::task<void> {
 		SubMessage msg;
 		std::cout << "start streaming" << std::endl;
-		while(co_await rpc.read(msg, agrpc::use_sender)){
-			std::cout << "got message: " << msg.value() << std::endl;
+		while(true){
+			msg.set_value(msg.value()+1);
+			std::cout << "sending message: " << msg.value() << std::endl;
+			if(!co_await rpc.write(msg)){
+				std::cerr << "streaming rpc failed to write message" << std::endl;
+				break;
+			}
+			co_await exec::schedule_after(timer_thread.get_scheduler(),std::chrono::seconds(10));
 		}
 	}
 
@@ -57,7 +64,8 @@ private:
 	PubSub::AsyncService & service;
 	std::unique_ptr<grpc::Server> server;
 	std::unique_ptr<agrpc::GrpcContext> grpc_context;
-	
+	exec::timed_thread_context timer_thread;
+
 	exec::async_scope scope;
 	std::jthread context_thread;
 };

@@ -27,10 +27,12 @@ int main(int argc, const char **argv) {
   google::protobuf::Empty empty;
   stdexec::sync_wait(rpc.start(stub, empty));
 
-  for(int i = 0; ;++i){
-    std::cin.get();
-    msg.set_value(i);
-    stdexec::sync_wait(rpc.write(msg));
+  while(true){
+    const auto opt_bool = stdexec::sync_wait(rpc.read(msg));
+    if(!opt_bool.has_value() && !std::get<0>(*opt_bool)){
+      break;
+    }
+    std::cout << "got message "<< msg.value() << std::endl;
   }
 
   return 0;
