@@ -29,7 +29,7 @@ int main(int argc, const char **argv) {
 
   while(true){
     const auto opt_bool = stdexec::sync_wait(rpc.read(msg));
-    if(!opt_bool.has_value() && !std::get<0>(*opt_bool)){
+    if(!opt_bool.has_value() || !std::get<0>(*opt_bool)) {
       break;
     }
     std::cout << "got message "<< msg.value() << std::endl;
