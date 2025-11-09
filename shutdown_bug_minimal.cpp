@@ -1,0 +1,59 @@
+#include <agrpc/asio_grpc.hpp>
+#include <grpcpp/grpcpp.h>
+#include <grpcpp/server_builder.h>
+
+#include <exec/async_scope.hpp>
+#include <exec/task.hpp>
+
+#include "pubsub.grpc.pb.h"
+
+#include <chrono>
+#include <iostream>
+#include <thread>
+
+using StreamingRPC = agrpc::ServerRPC<&PubSub::AsyncService::Requestsubscribe>;
+
+auto handle_streaming_request(StreamingRPC &rpc, google::protobuf::Empty &)
+    -> exec::task<void> {
+  SubMessage msg;
+  std::cout << "dummy_request" << std::endl;
+  co_return;
+}
+
+int main(int argc, const char **argv) {
+  PubSub::AsyncService service;
+
+  std::string url("0.0.0.0:50051");
+  grpc::ServerBuilder builder;
+  builder.AddListeningPort(url, grpc::InsecureServerCredentials());
+  builder.RegisterService(&service);
+  auto grpc_context = agrpc::GrpcContext(builder.AddCompletionQueue());
+
+  auto server = builder.BuildAndStart();
+
+  grpc_context.work_started();
+  const auto context_thread =
+      std::jthread([&](std::stop_token) { grpc_context.run(); });
+  exec::async_scope scope;
+
+  scope.spawn(stdexec::schedule(grpc_context.get_scheduler()) |
+              stdexec::let_value([&]() {
+                return agrpc::register_sender_rpc_handler<StreamingRPC>(
+                    grpc_context, service, &handle_streaming_request);
+              }) |
+              stdexec::upon_error([](auto) {
+                std::cout << "register_sender_rpc_handler exception"
+                          << std::endl;
+              }) |
+              stdexec::upon_stopped([]() {
+                std::cout << "register_sender_rpc_handler stopped" << std::endl;
+              }));
+
+  std::cout << "press any key to stop" << std::endl;
+  std::cin.get();
+
+  scope.request_stop();
+
+  stdexec::sync_wait(scope.on_empty());
+  return 0;
+}

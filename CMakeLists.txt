@@ -10,7 +10,6 @@ set(STDEXEC_BUILD_TESTS OFF)
 add_subdirectory(deps/asio-grpc)
 add_subdirectory(deps/stdexec)
 
-
 add_library(proto STATIC)
 target_link_libraries(proto PUBLIC gRPC::grpc++)
 asio_grpc_protobuf_generate(
@@ -27,3 +26,7 @@ target_link_libraries(client PRIVATE proto asio-grpc::asio-grpc-stdexec STDEXEC:
 
 add_executable(server server.cpp)
 target_link_libraries(server PRIVATE proto asio-grpc::asio-grpc-stdexec STDEXEC::stdexec)
+
+add_executable(shutdown_bug_minimal shutdown_bug_minimal.cpp)
+target_link_libraries(shutdown_bug_minimal PRIVATE proto asio-grpc::asio-grpc-stdexec STDEXEC::stdexec)
+
