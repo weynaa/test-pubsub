@@ -67,7 +67,7 @@ int main(int argc, const char **argv) {
   std::cout << "press any key to stop the server" << std::endl;
   std::cin.get();
   scope.request_stop();
-  server->Shutdown();
+  server->Shutdown(std::chrono::system_clock::now());
   stdexec::sync_wait(scope.on_empty());
   grpc_context.work_finished();
   return 0;
