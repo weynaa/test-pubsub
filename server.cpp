@@ -10,14 +10,15 @@
 
 #include <chrono>
 #include <iostream>
-#include <memory>
 #include <thread>
 
-struct ScopeExit {
+using StreamingRPC = agrpc::ServerRPC<&PubSub::AsyncService::Requestsubscribe>;
 
+exec::timed_thread_context timer;
+
+struct ScopeExit {
   explicit ScopeExit(std::function<void()> func) noexcept
       : m_func(std::move(func)) {}
-
   ScopeExit(const ScopeExit &) = delete;
   ScopeExit(ScopeExit &&) = delete;
   ~ScopeExit() { m_func(); }
@@ -26,71 +27,13 @@ private:
   std::function<void()> m_func;
 };
 
-struct AgrpcServer {
-
-  using StreamingRPC =
-      agrpc::ServerRPC<&PubSub::AsyncService::Requestsubscribe>;
-
-  AgrpcServer(std::unique_ptr<grpc::Server> _server,
-              std::unique_ptr<agrpc::GrpcContext> _grpc_context,
-              PubSub::AsyncService &_service)
-      : server(std::move(_server)), service(_service),
-        grpc_context(std::move(_grpc_context)),
-        context_thread(start_thread(*grpc_context)) {
-    scope.spawn(
-        stdexec::schedule(grpc_context->get_scheduler()) |
-        stdexec::let_value([this]() {
-          return agrpc::register_sender_rpc_handler<StreamingRPC>(
-              *grpc_context, service,
-              std::bind_front(&AgrpcServer::handle_streaming_request, this));
-        }) |
-        stdexec::upon_error(
-            [](auto) { std::cout << "rpc_handler exception" << std::endl; }) |
-        stdexec::upon_stopped(
-            []() { std::cout << "rpc_handler stopped" << std::endl; }));
-  }
-
-  ~AgrpcServer() {
-    scope.request_stop();
-    //server->Shutdown(std::chrono::system_clock::now()+ std::chrono::seconds(1));
-    stdexec::sync_wait(scope.on_empty());
-    grpc_context->work_finished();
-    context_thread.join();
-  }
-
-private:
-  auto handle_streaming_request(StreamingRPC &rpc, google::protobuf::Empty &)
-      -> exec::task<void> {
-    SubMessage msg;
-    std::cout << "start streaming" << std::endl;
-    const auto scope_exit =
-        ScopeExit([]() { std::cout << "rpc handler finished" << std::endl; });
-
-    while (true) {
-      msg.set_value(msg.value() + 1);
-      std::cout << "sending message: " << msg.value() << std::endl;
-      if (!co_await rpc.write(msg)) {
-        std::cerr << "streaming rpc failed to write message" << std::endl;
-        break;
-      }
-      co_await exec::schedule_after(timer_thread.get_scheduler(),
-                                    std::chrono::hours(10));
-    }
-  }
-
-  static auto start_thread(agrpc::GrpcContext &context) -> std::jthread {
-    context.work_started();
-    return std::jthread([&context](std::stop_token) { context.run(); });
-  }
-
-  PubSub::AsyncService &service;
-  std::unique_ptr<grpc::Server> server;
-  std::unique_ptr<agrpc::GrpcContext> grpc_context;
-  exec::timed_thread_context timer_thread;
-
-  exec::async_scope scope;
-  std::jthread context_thread;
-};
+auto handle_streaming_request(StreamingRPC &rpc, google::protobuf::Empty &)
+    -> exec::task<void> {
+  std::cout << "dummy_request never finishes" << std::endl;
+  ScopeExit exit_log(
+      []() { std::cout << "dummy_request stopped" << std::endl; });
+  co_await exec::schedule_after(timer.get_scheduler(), std::chrono::hours(1));
+}
 
 int main(int argc, const char **argv) {
   PubSub::AsyncService service;
@@ -99,13 +42,33 @@ int main(int argc, const char **argv) {
   grpc::ServerBuilder builder;
   builder.AddListeningPort(url, grpc::InsecureServerCredentials());
   builder.RegisterService(&service);
-  auto grpc_context =
-      std::make_unique<agrpc::GrpcContext>(builder.AddCompletionQueue());
+  auto grpc_context = agrpc::GrpcContext(builder.AddCompletionQueue());
 
   auto server = builder.BuildAndStart();
-  AgrpcServer agrpc_server(std::move(server), std::move(grpc_context), service);
 
-  std::cout << "press any key to stop" << std::endl;
+  grpc_context.work_started();
+  const auto context_thread =
+      std::jthread([&](std::stop_token) { grpc_context.run(); });
+  exec::async_scope scope;
+
+  scope.spawn(stdexec::schedule(grpc_context.get_scheduler()) |
+              stdexec::let_value([&]() {
+                return agrpc::register_sender_rpc_handler<StreamingRPC>(
+                    grpc_context, service, &handle_streaming_request);
+              }) |
+              stdexec::upon_error([](auto) {
+                std::cout << "register_sender_rpc_handler exception"
+                          << std::endl;
+              }) |
+              stdexec::upon_stopped([]() {
+                std::cout << "register_sender_rpc_handler stopped" << std::endl;
+              }));
+
+  std::cout << "press any key to stop the server" << std::endl;
   std::cin.get();
+  scope.request_stop();
+  server->Shutdown();
+  stdexec::sync_wait(scope.on_empty());
+  grpc_context.work_finished();
   return 0;
 }

@@ -26,7 +26,3 @@ target_link_libraries(client PRIVATE proto asio-grpc::asio-grpc-stdexec STDEXEC:
 
 add_executable(server server.cpp)
 target_link_libraries(server PRIVATE proto asio-grpc::asio-grpc-stdexec STDEXEC::stdexec)
-
-add_executable(shutdown_bug_minimal shutdown_bug_minimal.cpp)
-target_link_libraries(shutdown_bug_minimal PRIVATE proto asio-grpc::asio-grpc-stdexec STDEXEC::stdexec)
-
